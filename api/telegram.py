@@ -15,7 +15,7 @@ def button_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
     if query.data == 'buy_painting':
-        query.message.reply_text('Выберите картину!')
+        query.message.reply_text('Выберите картинку!')
 
 dp.add_handler(CommandHandler('start', start))
 dp.add_handler(CallbackQueryHandler(button_callback))
