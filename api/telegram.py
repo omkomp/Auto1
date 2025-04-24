@@ -1,18 +1,17 @@
 import requests
 from flask import Flask, request
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, Dispatcher, CommandHandler, CallbackQueryHandler, CallbackContext
+from telegram import Update, Bot, InlineKeyboardButton, InlineKeyboardMarkup
 
 app = Flask(__name__)
-updater = Updater("7981458266:AAGp5jIgvf_KHN_P_7pBURBnYqrT-X89mNQ", use_context=True)
-dp = updater.dispatcher
+BOT_TOKEN = "7981458266:AAGp5jIgvf_KHN_P_7pBURBnYqrT-X89mNQ"
+bot = Bot(token=BOT_TOKEN)
 
-def start(update: Update, context: CallbackContext) -> None:
+def start(update):
     keyboard = [[InlineKeyboardButton("Купить картину", callback_data='buy_painting')]]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    update.message.reply_text('Добро пожаловать в магазин!', reply_markup=reply_markup)
+    bot.send_message(chat_id=update.message.chat_id, text='Добро пожаловать в магазин!', reply_markup=reply_markup)
 
-def button_callback(update: Update, context: CallbackContext) -> None:
+def button_callback(update):
     query = update.callback_query
     query.answer()
 
@@ -21,7 +20,7 @@ def button_callback(update: Update, context: CallbackContext) -> None:
             response = requests.get('https://imageshopbot.vercel.app/api/products')
             products = response.json()
         except Exception as e:
-            query.message.reply_text('Ошибка при загрузке картин: ' + str(e))
+            bot.send_message(chat_id=query.message.chat_id, text='Ошибка при загрузке картин: ' + str(e))
             return
 
         keyboard = [
@@ -29,26 +28,22 @@ def button_callback(update: Update, context: CallbackContext) -> None:
             for product in products
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        query.message.reply_text('Выберите картину:', reply_markup=reply_markup)
-
-def select_painting_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    query.answer()
-    painting_id = query.data.split('_')[-1]
-    query.message.reply_text(f'Вы выбрали картину с  ID: {painting_id}!')
-
-dp.add_handler(CommandHandler('start', start))
-dp.add_handler(CallbackQueryHandler(button_callback, pattern='^buy_painting$'))
-dp.add_handler(CallbackQueryHandler(select_painting_callback, pattern='^select_painting_'))
+        bot.send_message(chat_id=query.message.chat_id, text='Выберите картину:', reply_markup=reply_markup)
+    elif query.data.startswith('select_painting_'):
+        painting_id = query.data.split('_')[-1]
+        bot.send_message(chat_id=query.message.chat_id, text=f'Вы выбрали картину с ID: {painting_id}!')
 
 @app.route('/telegram', methods=['POST', 'GET'])
 def webhook():
     if request.method == 'POST':
-        update = Update.de_json(request.get_json(force=True), updater.bot)
-        dp.process_update(update)
+        update = Update.de_json(request.get_json(force=True), bot)
+        if update.message and update.message.text == '/start':
+            start(update)
+        elif update.callback_query:
+            button_callback(update)
         return 'OK'
     return 'Webhook is running'
 
 @app.route('/')
 def index():
-    return 'Bot is running' 
+    return 'Bot is running'
