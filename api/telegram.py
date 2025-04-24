@@ -1,19 +1,19 @@
 from flask import Flask, request
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, Dispatcher, CommandHandler, CallbackQueryHandler
+from telegram.ext import Updater, Dispatcher, CommandHandler, CallbackQueryHandler, CallbackContext
 
 app = Flask(__name__)
-updater = Updater("7981458266:AAGp5jIgvf_KHN_P_7pBURBnYqrT-X89mNQ", use_context=True)  # Замените YOUR_BOT_TOKEN на ваш токен
+updater = Updater("7981458266:AAGp5jIgvf_KHN_P_7pBURBnYqrT-X89mNQ", use_context=True)  # Убрали "bot"
 dp = updater.dispatcher
 
 # Обработчик команды /start
-def start(update, context):
+def start(update: Update, context: CallbackContext) -> None:
     keyboard = [[InlineKeyboardButton("Купить картину", callback_data='buy_painting')]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     update.message.reply_text('Добро пожаловать в магазин!', reply_markup=reply_markup)
 
 # Обработчик нажатия на кнопку
-def button_callback(update, context):
+def button_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
     if query.data == 'buy_painting':
