@@ -15,10 +15,17 @@ def button_callback(update):
     query = update.callback_query
     query.answer()
 
+    # Отладка: подтверждаем, что функция вызвана
+    bot.send_message(chat_id=query.message.chat_id, text='Кнопка "Купить картину" нажата')
+
     if query.data == 'buy_painting':
         try:
+            # Отладка: перед запросом к /api/products
+            bot.send_message(chat_id=query.message.chat_id, text='Запрашиваю список картин...')
             response = requests.get('https://imageshopbot.vercel.app/api/products')
             products = response.json()
+            # Отладка: после успешного запроса
+            bot.send_message(chat_id=query.message.chat_id, text=f'Получено {len(products)} картин')
         except Exception as e:
             bot.send_message(chat_id=query.message.chat_id, text='Ошибка при загрузке картин: ' + str(e))
             return
@@ -36,12 +43,19 @@ def button_callback(update):
 @app.route('/telegram', methods=['POST', 'GET'])
 def webhook():
     if request.method == 'POST':
-        update = Update.de_json(request.get_json(force=True), bot)
-        if update.message and update.message.text == '/start':
-            start(update)
-        elif update.callback_query:
-            button_callback(update)
-        return 'OK'
+        try:
+            update = Update.de_json(request.get_json(force=True), bot)
+            if update.message and update.message.text == '/start':
+                start(update)
+            elif update.callback_query:
+                # Отладка: подтверждаем, что получили callback
+                print("Получен callback от Telegram")
+                button_callback(update)
+            return 'OK'
+        except Exception as e:
+            # Отладка: выводим ошибку в логи
+            print(f"Ошибка в webhook: {str(e)}")
+            return 'Error', 500
     return 'Webhook is running'
 
 @app.route('/')
