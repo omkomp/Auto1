@@ -1,3 +1,4 @@
+import requests
 from flask import Flask, request
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, Dispatcher, CommandHandler, CallbackQueryHandler, CallbackContext
@@ -14,17 +15,39 @@ def start(update: Update, context: CallbackContext) -> None:
 def button_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
+
     if query.data == 'buy_painting':
-        query.message.reply_text('Выберите картинку!')
+        try:
+            response = requests.get('https://imageshopbot.vercel.app/api/products')
+            products = response.json()
+        except Exception as e:
+            query.message.reply_text('Ошибка при загрузке картин: ' + str(e))
+            return
+
+        keyboard = [
+            [InlineKeyboardButton(product['name'], callback_data=f"select_painting_{product['item_id']}")]
+            for product in products
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        query.message.reply_text('Выберите картину:', reply_markup=reply_markup)
+
+def select_painting_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()
+    painting_id = query.data.split('_')[-1]
+    query.message.reply_text(f'Вы выбрали картину с ID: {painting_id}!')
 
 dp.add_handler(CommandHandler('start', start))
-dp.add_handler(CallbackQueryHandler(button_callback))
+dp.add_handler(CallbackQueryHandler(button_callback, pattern='^buy_painting$'))
+dp.add_handler(CallbackQueryHandler(select_painting_callback, pattern='^select_painting_'))
 
-@app.route('/telegram', methods=['POST'])
+@app.route('/telegram', methods=['POST', 'GET'])
 def webhook():
-    update = Update.de_json(request.get_json(force=True), updater.bot)
-    dp.process_update(update)
-    return 'OK'
+    if request.method == 'POST':
+        update = Update.de_json(request.get_json(force=True), updater.bot)
+        dp.process_update(update)
+        return 'OK'
+    return 'Webhook is running'
 
 @app.route('/')
 def index():
