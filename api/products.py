@@ -4,7 +4,8 @@ app = Flask(__name__)
 
 @app.route('/api/products', methods=['GET'])
 def get_products():
-    return jsonify({"products": ["item1", "item2"]})
-
-if __name__ == "__main__":
-    app.run()
+    products = [
+        {"item_id": "1", "name": "Картина 1", "price": 100},
+        {"item_id": "2", "name": "Картина 2", "price": 150}
+    ]
+    return jsonify(products)
