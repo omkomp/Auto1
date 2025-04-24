@@ -35,7 +35,7 @@ def select_painting_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
     query.answer()
     painting_id = query.data.split('_')[-1]
-    query.message.reply_text(f'Вы выбрали картину с ID: {painting_id}!')
+    query.message.reply_text(f'Вы выбрали картину с  ID: {painting_id}!')
 
 dp.add_handler(CommandHandler('start', start))
 dp.add_handler(CallbackQueryHandler(button_callback, pattern='^buy_painting$'))
