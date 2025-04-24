@@ -3,7 +3,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, Dispatcher, CommandHandler, CallbackQueryHandler
 
 app = Flask(__name__)
-updater = Updater("bot7981458266:AAGp5jIgvf_KHN_P_7pBURBnYqrT-X89mNQ", use_context=True)  # Замените YOUR_BOT_TOKEN на ваш токен
+updater = Updater("7981458266:AAGp5jIgvf_KHN_P_7pBURBnYqrT-X89mNQ", use_context=True)  # Замените YOUR_BOT_TOKEN на ваш токен
 dp = updater.dispatcher
 
 # Обработчик команды /start
