@@ -46,27 +46,29 @@ def tron_address_to_hex(address):
     return hex_address
 
 def start(update):
+    chat_id = update.message.chat_id
+    # Если есть активный заказ, удаляем его при новом /start
+    if chat_id in pending_orders:
+        del pending_orders[chat_id]
     keyboard = [[InlineKeyboardButton("Купить картину", callback_data='buy_painting')]]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    bot.send_message(chat_id=update.message.chat_id, text='Добро пожаловать в магазин!', reply_markup=reply_markup)
+    bot.send_message(chat_id=chat_id, text='Добро пожаловать в магазин!', reply_markup=reply_markup)
 
 def button_callback(update):
     query = update.callback_query
-    try:
-        query.answer()
-    except BadRequest as e:
-        print(f"Ошибка при ответе на callback: {str(e)}")
+    chat_id = query.message.chat_id
 
-    bot.send_message(chat_id=query.message.chat_id, text='Кнопка "Купить картину" нажата')
+    # Убрали query.answer() для предотвращения ошибки
+    bot.send_message(chat_id=chat_id, text='Кнопка "Купить картину" нажата')
 
     if query.data == 'buy_painting':
         try:
-            bot.send_message(chat_id=query.message.chat_id, text='Запрашиваю список картин...')
+            bot.send_message(chat_id=chat_id, text='Запрашиваю список картин...')
             response = requests.get('https://imageshopbot.vercel.app/api/products')
             products = response.json()
-            bot.send_message(chat_id=query.message.chat_id, text=f'Получено {len(products)} картин')
+            bot.send_message(chat_id=chat_id, text=f'Получено {len(products)} картин')
         except Exception as e:
-            bot.send_message(chat_id=query.message.chat_id, text='Ошибка при загрузке картин: ' + str(e))
+            bot.send_message(chat_id=chat_id, text='Ошибка при загрузке картин: ' + str(e))
             return
 
         keyboard = [
@@ -74,59 +76,61 @@ def button_callback(update):
             for product in products
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        bot.send_message(chat_id=query.message.chat_id, text='Выберите картину:', reply_markup=reply_markup)
+        bot.send_message(chat_id=chat_id, text='Выберите картину:', reply_markup=reply_markup)
     elif query.data.startswith('select_painting_'):
+        # Проверяем, есть ли уже активный заказ
+        if chat_id in pending_orders:
+            bot.send_message(chat_id=chat_id, text="У вас уже есть активный заказ. Дождитесь его завершения или нажмите 'Отменить заказ'.",
+                             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Отменить заказ", callback_data='cancel_order')]]))
+            return
+
         painting_id = query.data.split('_')[-1]
         response = requests.get('https://imageshopbot.vercel.app/api/products')
         products = response.json()
         selected_painting = next((p for p in products if p['item_id'] == painting_id), None)
 
         if selected_painting:
-            bot.send_message(chat_id=query.message.chat_id, text=f"Вы выбрали картину с ID: {painting_id}!")
+            bot.send_message(chat_id=chat_id, text=f"Вы выбрали картину с ID: {painting_id}!")
 
-            # Получаем курс USDT/RUB
             usdt_price_rub = get_usdt_price_in_rub()
             if not usdt_price_rub:
-                bot.send_message(chat_id=query.message.chat_id, text="Не удалось получить курс USDT. Попробуйте позже.")
+                bot.send_message(chat_id=chat_id, text="Не удалось получить курс USDT. Попробуйте позже.")
                 return
 
-            # Конвертируем цену картины в USDT
             price_rub = selected_painting['price']
             price_usdt = price_rub / usdt_price_rub
             price_usdt_units = int(price_usdt * 1e6)
 
-            # Проверяем, есть ли уже заказ для этого чата
-            if query.message.chat_id in pending_orders:
-                bot.send_message(chat_id=query.message.chat_id, text="У вас уже есть активный заказ. Дождитесь его завершения или начните заново с /start.")
-                return
-
-            # Формируем данные для оплаты
             payment_url = f"tron:{TRON_WALLET_ADDRESS}?amount={price_usdt}&token=USDT&message=Payment for painting {painting_id}"
             qr_code_buffer = generate_qr_code(payment_url)
 
-            # Отправляем пользователю данные для оплаты
             bot.send_message(
-                chat_id=query.message.chat_id,
+                chat_id=chat_id,
                 text=f"Пожалуйста, переведите {price_usdt:.2f} USDT (TRC-20) на адрес:\n{TRON_WALLET_ADDRESS}\n\nСумма в рублях: {price_rub} RUB"
             )
             bot.send_photo(
-                chat_id=query.message.chat_id,
+                chat_id=chat_id,
                 photo=qr_code_buffer,
-                caption="Сканируйте QR-код для оплаты (USDT TRC-20)"
+                caption="Сканируйте QR-код для оплаты (USDT TRC-20)",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Отменить заказ", callback_data='cancel_order')]])
             )
 
-            # Сохраняем заказ
-            pending_orders[query.message.chat_id] = {
+            pending_orders[chat_id] = {
                 "painting_id": painting_id,
                 "price_usdt_units": price_usdt_units,
                 "timestamp": time.time(),
-                "processed": False  # Флаг для предотвращения повторной обработки
+                "processed": False
             }
 
-            # Запускаем проверку оплаты
-            check_payment(query.message.chat_id)
+            check_payment(chat_id)
         else:
-            bot.send_message(chat_id=query.message.chat_id, text="Картина не найдена.")
+            bot.send_message(chat_id=chat_id, text="Картина не найдена.")
+    elif query.data == 'cancel_order':
+        if chat_id in pending_orders:
+            del pending_orders[chat_id]
+            bot.send_message(chat_id=chat_id, text="Заказ отменён. Начните заново с /start.")
+        else:
+            bot.send_message(chat_id=chat_id, text="Нет активного заказа для отмены.")
 
 def check_payment(chat_id):
     order = pending_orders.get(chat_id)
@@ -139,7 +143,7 @@ def check_payment(chat_id):
 
     wallet_hex = tron_address_to_hex(TRON_WALLET_ADDRESS)
 
-    timeout = 600  # 10 минут
+    timeout = 600
     last_checked_tx = None
 
     while time.time() - start_time < timeout:
