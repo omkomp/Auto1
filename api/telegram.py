@@ -11,8 +11,7 @@ import base58  # Для декодирования Tron-адресов
 app = Flask(__name__)
 BOT_TOKEN = "7981458266:AAGp5jIgvf_KHN_P_7pBURBnYqrT-X89mNQ"
 bot = Bot(token=BOT_TOKEN)
-TRON_WALLET_ADDRESS = "TMMbcqzcN6fFEXeq5TWqHk4nDUsmrVypng"  # Замените на ваш Tron-адрес
-TRONGRID_API_KEY = "6ab0dfd8-2f14-489d-82a3-c30f630fb0a8"  # Замените на ваш API-ключ TronGrid
+
 USDT_CONTRACT_ADDRESS = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"  # Контракт USDT (TRC-20) в сети Tron
 
 # Хранилище заказов (временное, для демонстрации; в продакшене используйте БД)
