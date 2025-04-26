@@ -20,6 +20,7 @@ if not TRON_WALLET_ADDRESS or not TRONGRID_API_KEY:
     raise ValueError("TRON_WALLET_ADDRESS или TRONGRID_API_KEY не заданы в переменных окружения!")
 
 pending_orders = {}
+processed_callbacks = set()  # Для отслеживания обработанных callback-запросов
 
 def get_usdt_price_in_rub():
     try:
@@ -59,12 +60,19 @@ def start(update):
 def button_callback(update):
     query = update.callback_query
     chat_id = query.message.chat_id
-    print(f"Получен callback для chat_id: {chat_id}, data: {query.data}")
+    query_id = query.id
 
-    bot.send_message(chat_id=chat_id, text='Кнопка "Купить картину" нажата')
+    # Проверяем, не был ли этот callback уже обработан
+    if query_id in processed_callbacks:
+        print(f"Callback {query_id} уже обработан, пропускаем.")
+        return
+    processed_callbacks.add(query_id)
+
+    print(f"Получен callback для chat_id: {chat_id}, data: {query.data}")
 
     if query.data == 'buy_painting':
         try:
+            bot.send_message(chat_id=chat_id, text='Кнопка "Купить картину" нажата')
             bot.send_message(chat_id=chat_id, text='Запрашиваю список картин...')
             response = requests.get('https://imageshopbot.vercel.app/api/products')
             products = response.json()
@@ -127,15 +135,19 @@ def button_callback(update):
         else:
             bot.send_message(chat_id=chat_id, text="Картина не найдена.")
     elif query.data == 'cancel_order':
+        print(f"Попытка отмены заказа для chat_id: {chat_id}")
         if chat_id in pending_orders:
             del pending_orders[chat_id]
             bot.send_message(chat_id=chat_id, text="Заказ отменён. Начните заново с /start.")
+            print("Заказ успешно отменён.")
         else:
             bot.send_message(chat_id=chat_id, text="Нет активного заказа для отмены.")
+            print("Заказ для отмены не найден.")
 
 def check_payment(chat_id):
     order = pending_orders.get(chat_id)
     if not order or order.get("processed"):
+        print(f"Заказ для chat_id {chat_id} не найден или уже обработан.")
         return
 
     painting_id = order["painting_id"]
@@ -149,6 +161,7 @@ def check_payment(chat_id):
 
     while time.time() - start_time < timeout:
         if chat_id not in pending_orders or pending_orders[chat_id]["processed"]:
+            print(f"Заказ для chat_id {chat_id} был удалён или обработан, завершаем проверку.")
             return
 
         try:
@@ -177,6 +190,7 @@ def check_payment(chat_id):
                     if chat_id in pending_orders:
                         pending_orders[chat_id]["processed"] = True
                         del pending_orders[chat_id]
+                    print(f"Оплата подтверждена для chat_id: {chat_id}")
                     return
 
                 last_checked_tx = max(last_checked_tx or 0, int(tx["block_timestamp"]) / 1000)
@@ -190,6 +204,7 @@ def check_payment(chat_id):
         bot.send_message(chat_id=chat_id, text="Время ожидания оплаты истекло. Попробуйте снова.")
         pending_orders[chat_id]["processed"] = True
         del pending_orders[chat_id]
+        print(f"Время ожидания истекло для chat_id: {chat_id}")
 
 @app.route('/telegram', methods=['POST', 'GET'])
 def webhook():
