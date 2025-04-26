@@ -20,18 +20,23 @@ if not TRON_WALLET_ADDRESS or not TRONGRID_API_KEY:
     raise ValueError("TRON_WALLET_ADDRESS или TRONGRID_API_KEY не заданы в переменных окружения!")
 
 pending_orders = {}
-processed_callbacks = set()  # Для отслеживания обработанных callback-запросов
+processed_callbacks = set()
 
 def get_usdt_price_in_rub():
+    print("Запрос курса USDT/RUB...")
     try:
         response = requests.get("https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=rub")
+        response.raise_for_status()  # Проверка на HTTP-ошибки
         data = response.json()
-        return data["tether"]["rub"]
+        price = data["tether"]["rub"]
+        print(f"Курс USDT/RUB: {price}")
+        return price
     except Exception as e:
         print(f"Ошибка при получении курса USDT: {str(e)}")
         return None
 
 def generate_qr_code(payment_url):
+    print("Генерация QR-кода...")
     qr = qrcode.QRCode(version=1, box_size=10, border=4)
     qr.add_data(payment_url)
     qr.make(fit=True)
@@ -39,11 +44,14 @@ def generate_qr_code(payment_url):
     buffer = BytesIO()
     img.save(buffer, format="PNG")
     buffer.seek(0)
+    print("QR-код сгенерирован.")
     return buffer
 
 def tron_address_to_hex(address):
+    print("Преобразование Tron-адреса в HEX...")
     decoded = base58.b58decode(address)
     hex_address = "41" + decoded[1:-4].hex()
+    print(f"Tron-адрес в HEX: {hex_address}")
     return hex_address
 
 def start(update):
@@ -62,7 +70,6 @@ def button_callback(update):
     chat_id = query.message.chat_id
     query_id = query.id
 
-    # Проверяем, не был ли этот callback уже обработан
     if query_id in processed_callbacks:
         print(f"Callback {query_id} уже обработан, пропускаем.")
         return
@@ -72,12 +79,17 @@ def button_callback(update):
 
     if query.data == 'buy_painting':
         try:
+            print("Отправка сообщения 'Кнопка Купить картину нажата'...")
             bot.send_message(chat_id=chat_id, text='Кнопка "Купить картину" нажата')
+            print("Запрос списка картин...")
             bot.send_message(chat_id=chat_id, text='Запрашиваю список картин...')
             response = requests.get('https://imageshopbot.vercel.app/api/products')
+            response.raise_for_status()
             products = response.json()
+            print(f"Получены продукты: {products}")
             bot.send_message(chat_id=chat_id, text=f'Получено {len(products)} картин')
         except Exception as e:
+            print(f"Ошибка при загрузке картин: {str(e)}")
             bot.send_message(chat_id=chat_id, text='Ошибка при загрузке картин: ' + str(e))
             return
 
@@ -89,11 +101,13 @@ def button_callback(update):
         bot.send_message(chat_id=chat_id, text='Выберите картину:', reply_markup=reply_markup)
     elif query.data.startswith('select_painting_'):
         if chat_id in pending_orders:
+            print(f"Обнаружен активный заказ для chat_id: {chat_id}")
             bot.send_message(chat_id=chat_id, text="У вас уже есть активный заказ. Дождитесь его завершения или нажмите 'Отменить заказ'.",
                              reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Отменить заказ", callback_data='cancel_order')]]))
             return
 
         painting_id = query.data.split('_')[-1]
+        print(f"Выбрана картина с ID: {painting_id}")
         response = requests.get('https://imageshopbot.vercel.app/api/products')
         products = response.json()
         selected_painting = next((p for p in products if p['item_id'] == painting_id), None)
@@ -109,14 +123,17 @@ def button_callback(update):
             price_rub = selected_painting['price']
             price_usdt = price_rub / usdt_price_rub
             price_usdt_units = int(price_usdt * 1e6)
+            print(f"Цена картины: {price_rub} RUB, {price_usdt:.2f} USDT")
 
             payment_url = f"tron:{TRON_WALLET_ADDRESS}?amount={price_usdt}&token=USDT&message=Payment for painting {painting_id}"
             qr_code_buffer = generate_qr_code(payment_url)
 
+            print("Отправка сообщения с данными для оплаты...")
             bot.send_message(
                 chat_id=chat_id,
                 text=f"Пожалуйста, переведите {price_usdt:.2f} USDT (TRC-20) на адрес:\n{TRON_WALLET_ADDRESS}\n\nСумма в рублях: {price_rub} RUB"
             )
+            print("Отправка QR-кода...")
             bot.send_photo(
                 chat_id=chat_id,
                 photo=qr_code_buffer,
@@ -130,6 +147,7 @@ def button_callback(update):
                 "timestamp": time.time(),
                 "processed": False
             }
+            print(f"Заказ сохранён для chat_id: {chat_id}")
 
             check_payment(chat_id)
         else:
@@ -160,7 +178,7 @@ def check_payment(chat_id):
     last_checked_tx = None
 
     while time.time() - start_time < timeout:
-        if chat_id not in pending_orders or pending_orders[chat_id]["processed"]:
+        if chat_id not in pending_orders or pending_orders[chat_id]["pending_orders"]:
             print(f"Заказ для chat_id {chat_id} был удалён или обработан, завершаем проверку.")
             return
 
