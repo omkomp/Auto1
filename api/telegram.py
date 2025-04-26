@@ -47,18 +47,20 @@ def tron_address_to_hex(address):
 
 def start(update):
     chat_id = update.message.chat_id
-    # Если есть активный заказ, удаляем его при новом /start
+    print(f"Получена команда /start для chat_id: {chat_id}")
     if chat_id in pending_orders:
         del pending_orders[chat_id]
     keyboard = [[InlineKeyboardButton("Купить картину", callback_data='buy_painting')]]
     reply_markup = InlineKeyboardMarkup(keyboard)
+    print("Отправка приветственного сообщения...")
     bot.send_message(chat_id=chat_id, text='Добро пожаловать в магазин!', reply_markup=reply_markup)
+    print("Сообщение отправлено.")
 
 def button_callback(update):
     query = update.callback_query
     chat_id = query.message.chat_id
+    print(f"Получен callback для chat_id: {chat_id}, data: {query.data}")
 
-    # Убрали query.answer() для предотвращения ошибки
     bot.send_message(chat_id=chat_id, text='Кнопка "Купить картину" нажата')
 
     if query.data == 'buy_painting':
@@ -78,7 +80,6 @@ def button_callback(update):
         reply_markup = InlineKeyboardMarkup(keyboard)
         bot.send_message(chat_id=chat_id, text='Выберите картину:', reply_markup=reply_markup)
     elif query.data.startswith('select_painting_'):
-        # Проверяем, есть ли уже активный заказ
         if chat_id in pending_orders:
             bot.send_message(chat_id=chat_id, text="У вас уже есть активный заказ. Дождитесь его завершения или нажмите 'Отменить заказ'.",
                              reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Отменить заказ", callback_data='cancel_order')]]))
@@ -192,9 +193,11 @@ def check_payment(chat_id):
 
 @app.route('/telegram', methods=['POST', 'GET'])
 def webhook():
+    print("Получен запрос на /telegram")
     if request.method == 'POST':
         try:
             update = Update.de_json(request.get_json(force=True), bot)
+            print(f"Обновление: {update}")
             if update.message and update.message.text == '/start':
                 start(update)
             elif update.callback_query:
@@ -204,6 +207,7 @@ def webhook():
         except Exception as e:
             print(f"Ошибка в webhook: {str(e)}")
             return 'Error', 500
+    print("Webhook возвращает статус")
     return 'Webhook is running'
 
 @app.route('/')
