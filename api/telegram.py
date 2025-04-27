@@ -26,7 +26,7 @@ def get_usdt_price_in_rub():
     print("Запрос курса USDT/RUB...")
     try:
         response = requests.get("https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=rub")
-        response.raise_for_status()  # Проверка на HTTP-ошибки
+        response.raise_for_status()
         data = response.json()
         price = data["tether"]["rub"]
         print(f"Курс USDT/RUB: {price}")
@@ -67,17 +67,30 @@ def start(update):
 
 def button_callback(update):
     query = update.callback_query
-    chat_id = query.message.chat_id
-    query_id = query.id
+    if not query:
+        print("Callback query отсутствует!")
+        return
+
+    try:
+        query_id = query.id
+        chat_id = query.message.chat_id if query.message else None
+        query_data = query.data
+    except AttributeError as e:
+        print(f"Ошибка доступа к полям callback-запроса: {str(e)}")
+        return
+
+    if not chat_id or not query_data:
+        print(f"Недостаточно данных в callback-запросе: chat_id={chat_id}, data={query_data}")
+        return
 
     if query_id in processed_callbacks:
         print(f"Callback {query_id} уже обработан, пропускаем.")
         return
     processed_callbacks.add(query_id)
 
-    print(f"Получен callback для chat_id: {chat_id}, data: {query.data}")
+    print(f"Получен callback для chat_id: {chat_id}, data: {query_data}")
 
-    if query.data == 'buy_painting':
+    if query_data == 'buy_painting':
         try:
             print("Отправка сообщения 'Кнопка Купить картину нажата'...")
             bot.send_message(chat_id=chat_id, text='Кнопка "Купить картину" нажата')
@@ -99,14 +112,14 @@ def button_callback(update):
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         bot.send_message(chat_id=chat_id, text='Выберите картину:', reply_markup=reply_markup)
-    elif query.data.startswith('select_painting_'):
+    elif query_data.startswith('select_painting_'):
         if chat_id in pending_orders:
             print(f"Обнаружен активный заказ для chat_id: {chat_id}")
             bot.send_message(chat_id=chat_id, text="У вас уже есть активный заказ. Дождитесь его завершения или нажмите 'Отменить заказ'.",
                              reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Отменить заказ", callback_data='cancel_order')]]))
             return
 
-        painting_id = query.data.split('_')[-1]
+        painting_id = query_data.split('_')[-1]
         print(f"Выбрана картина с ID: {painting_id}")
         response = requests.get('https://imageshopbot.vercel.app/api/products')
         products = response.json()
@@ -152,7 +165,7 @@ def button_callback(update):
             check_payment(chat_id)
         else:
             bot.send_message(chat_id=chat_id, text="Картина не найдена.")
-    elif query.data == 'cancel_order':
+    elif query_data == 'cancel_order':
         print(f"Попытка отмены заказа для chat_id: {chat_id}")
         if chat_id in pending_orders:
             del pending_orders[chat_id]
@@ -178,7 +191,7 @@ def check_payment(chat_id):
     last_checked_tx = None
 
     while time.time() - start_time < timeout:
-        if chat_id not in pending_orders or pending_orders[chat_id]["pending_orders"]:
+        if chat_id not in pending_orders or pending_orders[chat_id]["processed"]:
             print(f"Заказ для chat_id {chat_id} был удалён или обработан, завершаем проверку.")
             return
 
