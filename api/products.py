@@ -7,7 +7,7 @@ products = [
         "item_id": "1",
         "name": "Архив с картинами",
         "price": 100,
-        "file_id": "AgADGG4AAjjucUg"  # Замени на file_id архива
+        "file_id": "AgACAgIAAxkDAAICeWgOcDHIb7ZUSw33aoWRHbG5DaRKAALt-TEb8w5wSOYCh4Uwqjf9AQADAgADcwADNgQ"  # Замени на file_id архива
     },
     {
         "item_id": "2",
