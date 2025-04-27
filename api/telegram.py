@@ -77,6 +77,17 @@ def check_payment(chat_id):
     price_usdt_units = order["price_usdt_units"]
     print(f"Проверка оплаты: painting_id={painting_id}, price_usdt_units={price_usdt_units}")
 
+    # Получаем информацию о картине, чтобы взять file_url
+    response = requests.get('https://imageshopbot.vercel.app/api/products')
+    products = response.json()
+    selected_painting = next((p for p in products if p['item_id'] == painting_id), None)
+    if not selected_painting or "file_url" not in selected_painting:
+        bot.send_message(chat_id=chat_id, text="Ошибка: файл картины не найден.")
+        print("Файл картины не найден в списке продуктов.")
+        return
+
+    file_url = selected_painting["file_url"]
+
     wallet_hex = tron_address_to_hex(TRON_WALLET_ADDRESS)
 
     try:
@@ -101,12 +112,18 @@ def check_payment(chat_id):
             if value >= price_usdt_units:
                 bot.send_message(
                     chat_id=chat_id,
-                    text=f"Оплата подтверждена! Вы купили картину с ID: {painting_id}. Спасибо за покупку!"
+                    text=f"Оплата подтверждена! Вы купили картину с ID: {painting_id}. Вот ваша картина:"
+                )
+                # Отправляем файл пользователю
+                bot.send_document(
+                    chat_id=chat_id,
+                    document=file_url,
+                    filename=f"painting_{painting_id}.jpg"
                 )
                 if chat_id in pending_orders:
                     pending_orders[chat_id]["processed"] = True
                     del pending_orders[chat_id]
-                print(f"Оплата подтверждена для chat_id: {chat_id}")
+                print(f"Оплата подтверждена для chat_id: {chat_id}, файл отправлен.")
                 return
 
         bot.send_message(chat_id=chat_id, text="Оплата пока не подтверждена. Попробуйте снова через несколько минут.",

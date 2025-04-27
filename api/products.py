@@ -1,12 +1,26 @@
 from flask import Flask, jsonify
 
 app = Flask(__name__)
-app.config['JSON_AS_ASCII'] = False  # Отключаем экранирование не-ASCII символов
 
-@app.route('/api/products', methods=['GET'])
+# Список продуктов с прямыми ссылками на файлы
+products = [
+    {
+        "item_id": "1",
+        "name": "Картина 1",
+        "price": 100,
+        "file_url": "https://drive.google.com/uc?export=download&id=1xYz_12345AbCdEfGhIjKlMnOpQrStUvW"
+    },
+    {
+        "item_id": "2",
+        "name": "Картина 2",
+        "price": 150,
+        "file_url": "https://drive.google.com/uc?export=download&id=2xYz_67890AbCdEfGhIjKlMnOpQrStUvX"
+    }
+]
+
+@app.route('/api/products')
 def get_products():
-    products = [
-        {"item_id": "1", "name": "Картина 1", "price": 100},
-        {"item_id": "2", "name": "Картина 2", "price": 150}
-    ]
     return jsonify(products)
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
