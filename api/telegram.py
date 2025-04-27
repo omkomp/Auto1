@@ -77,22 +77,21 @@ def check_payment(chat_id):
     price_usdt_units = order["price_usdt_units"]
     print(f"Проверка оплаты: painting_id={painting_id}, price_usdt_units={price_usdt_units}")
 
-    # Получаем информацию о картине, чтобы взять file_url
+    # Получаем информацию о картине, чтобы взять file_id
     response = requests.get('https://imageshopbot.vercel.app/api/products')
     products = response.json()
     selected_painting = next((p for p in products if p['item_id'] == painting_id), None)
-    if not selected_painting or "file_url" not in selected_painting:
+    if not selected_painting or "file_id" not in selected_painting:
         bot.send_message(chat_id=chat_id, text="Ошибка: файл картины не найден.")
         print("Файл картины не найден в списке продуктов.")
         return
 
-    file_url = selected_painting["file_url"]
+    file_id = selected_painting["file_id"]
+    print(f"Используемый file_id: {file_id}")
 
     wallet_hex = tron_address_to_hex(TRON_WALLET_ADDRESS)
 
     try:
-        # Закомментируем проверку транзакций для теста отправки файла
-        """
         print("Запрос транзакций TronGrid...")
         url = f"https://api.trongrid.io/v1/accounts/{TRON_WALLET_ADDRESS}/transactions/trc20"
         headers = {"TRON-PRO-API-KEY": TRONGRID_API_KEY}
@@ -114,44 +113,26 @@ def check_payment(chat_id):
             if value >= price_usdt_units:
                 bot.send_message(
                     chat_id=chat_id,
-                    text=f"Оплата подтверждена! Вы купили картину с ID: {painting_id}. Вот ваша картина:"
+                    text=f"Оплата подтверждена! Вы купили картину с ID: {painting_id}. Вот ваш файл:"
                 )
                 # Отправляем файл пользователю
                 bot.send_document(
                     chat_id=chat_id,
-                    document=file_url,
-                    filename=f"painting_{painting_id}.jpg"
+                    document=file_id,
+                    filename=f"archive_{painting_id}.zip" if painting_id == "1" else f"painting_{painting_id}.jpg"
                 )
                 if chat_id in pending_orders:
                     pending_orders[chat_id]["processed"] = True
                     del pending_orders[chat_id]
                 print(f"Оплата подтверждена для chat_id: {chat_id}, файл отправлен.")
                 return
-        """
 
-        # Для теста сразу отправляем файл, как будто оплата подтверждена
-        bot.send_message(
-            chat_id=chat_id,
-            text=f"[ТЕСТ] Оплата подтверждена! Вы купили картину с ID: {painting_id}. Вот ваша картина:"
-        )
-        bot.send_document(
-            chat_id=chat_id,
-            document=file_url,
-            filename=f"painting_{painting_id}.jpg"
-        )
-        if chat_id in pending_orders:
-            pending_orders[chat_id]["processed"] = True
-            del pending_orders[chat_id]
-        print(f"[ТЕСТ] Файл отправлен для chat_id: {chat_id}")
-
-        """
         bot.send_message(chat_id=chat_id, text="Оплата пока не подтверждена. Попробуйте снова через несколько минут.",
                          reply_markup=InlineKeyboardMarkup([
                              [InlineKeyboardButton("Проверить оплату", callback_data='check_payment')],
                              [InlineKeyboardButton("Отменить заказ", callback_data='cancel_order')]
                          ]))
         print("Транзакция не найдена.")
-        """
     except Exception as e:
         print(f"Ошибка при проверке оплаты: {str(e)}")
         bot.send_message(chat_id=chat_id, text="Произошла ошибка при проверке оплаты. Попробуйте снова.",
@@ -171,6 +152,14 @@ def start(update):
     print("Отправка приветственного сообщения...")
     bot.send_message(chat_id=chat_id, text='Добро пожаловать в магазин!', reply_markup=reply_markup)
     print("Сообщение отправлено.")
+
+def handle_document(update):
+    chat_id = update.message.chat_id
+    document = update.message.document
+    file_id = document.file_id
+    file_name = document.file_name
+    print(f"Получен документ от chat_id: {chat_id}, file_id: {file_id}, file_name: {file_name}")
+    bot.send_message(chat_id=chat_id, text=f"Получен документ: {file_name}\nfile_id: {file_id}")
 
 def button_callback(update):
     query = update.callback_query
@@ -297,6 +286,8 @@ def webhook():
             print(f"Обновление: {update}")
             if update.message and update.message.text == '/start':
                 start(update)
+            elif update.message and update.message.document:  # Добавляем обработку документов
+                handle_document(update)
             elif update.callback_query:
                 print("Получен callback от Telegram")
                 button_callback(update)
