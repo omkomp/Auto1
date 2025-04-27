@@ -2,19 +2,18 @@ from flask import Flask, jsonify
 
 app = Flask(__name__)
 
-# Список продуктов с прямыми ссылками на файлы
 products = [
     {
         "item_id": "1",
-        "name": "Картина 1",
+        "name": "Архив с картинами",
         "price": 100,
-        "file_url": "https://drive.google.com/uc?export=download&id=1bc7kIbT9a7sofbzBdDiuaKBOgBw8RMhR"
+        "file_id": "1bc7kIbT9a7sofbzBdDiuaKBOgBw8RMhR"  # Замени на file_id архива
     },
     {
         "item_id": "2",
         "name": "Картина 2",
         "price": 150,
-        "file_url": "https://drive.google.com/uc?export=download&id=16fgRdfJokZvvLqTe8hJthAKu54I6tYtE"
+        "file_id": "YOUR_FILE_ID_2"  # file_id для Картины 2
     }
 ]
 
