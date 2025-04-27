@@ -8,6 +8,7 @@ from PIL import Image
 import time
 import base58
 import os
+import json
 
 app = Flask(__name__)
 BOT_TOKEN = "7981458266:AAGp5jIgvf_KHN_P_7pBURBnYqrT-X89mNQ"
@@ -19,7 +20,31 @@ USDT_CONTRACT_ADDRESS = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
 if not TRON_WALLET_ADDRESS or not TRONGRID_API_KEY:
     raise ValueError("TRON_WALLET_ADDRESS или TRONGRID_API_KEY не заданы в переменных окружения!")
 
-pending_orders = {}
+# Путь к файлу для хранения заказов
+ORDERS_FILE = "pending_orders.json"
+
+# Функции для работы с файлом
+def load_pending_orders():
+    try:
+        if os.path.exists(ORDERS_FILE):
+            with open(ORDERS_FILE, 'r') as f:
+                data = json.load(f)
+                # Приводим ключи к int, так как JSON хранит их как строки
+                return {int(k): v for k, v in data.items()}
+        return {}
+    except Exception as e:
+        print(f"Ошибка при загрузке pending_orders: {str(e)}")
+        return {}
+
+def save_pending_orders(orders):
+    try:
+        with open(ORDERS_FILE, 'w') as f:
+            json.dump(orders, f)
+    except Exception as e:
+        print(f"Ошибка при сохранении pending_orders: {str(e)}")
+
+# Загружаем заказы при старте
+pending_orders = load_pending_orders()
 processed_callbacks = set()
 
 def get_usdt_price_in_rub():
@@ -95,6 +120,7 @@ def check_payment(chat_id):
                 if chat_id in pending_orders:
                     pending_orders[chat_id]["processed"] = True
                     del pending_orders[chat_id]
+                    save_pending_orders(pending_orders)
                 print(f"Оплата подтверждена для chat_id: {chat_id}")
                 return
 
@@ -118,6 +144,7 @@ def start(update):
     print(f"Получена команда /start для chat_id: {chat_id}")
     if chat_id in pending_orders:
         del pending_orders[chat_id]
+        save_pending_orders(pending_orders)
     keyboard = [[InlineKeyboardButton("Купить картину", callback_data='buy_painting')]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     print("Отправка приветственного сообщения...")
@@ -222,6 +249,7 @@ def button_callback(update):
                 "timestamp": time.time(),
                 "processed": False
             }
+            save_pending_orders(pending_orders)
             print(f"Заказ сохранён для chat_id: {chat_id}")
         else:
             bot.send_message(chat_id=chat_id, text="Картина не найдена.")
@@ -231,6 +259,7 @@ def button_callback(update):
         print(f"Попытка отмены заказа для chat_id: {chat_id}")
         if chat_id in pending_orders:
             del pending_orders[chat_id]
+            save_pending_orders(pending_orders)
             bot.send_message(chat_id=chat_id, text="Заказ отменён. Начните заново с /start.")
             print("Заказ успешно отменён.")
         else:
@@ -242,6 +271,9 @@ def webhook():
     print("Получен запрос на /telegram")
     if request.method == 'POST':
         try:
+            # Загружаем заказы перед обработкой запроса
+            global pending_orders
+            pending_orders = load_pending_orders()
             update = Update.de_json(request.get_json(force=True), bot)
             print(f"Обновление: {update}")
             if update.message and update.message.text == '/start':
