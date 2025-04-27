@@ -65,13 +65,13 @@ def tron_address_to_hex(address):
     print(f"Tron-адрес в HEX: {hex_address}")
     return hex_address
 
-# def check_payment(chat_id):
-#     print(f"Ручная проверка оплаты для chat_id: {chat_id}")
-#     order = pending_orders.get(chat_id)
-#     if not order or order.get("processed"):
-#         bot.send_message(chat_id=chat_id, text="Заказ не найден или уже обработан.")
-#         print(f"Заказ для chat_id {chat_id} не найден или уже обработан.")
-#         return
+def check_payment(chat_id):
+    print(f"Ручная проверка оплаты для chat_id: {chat_id}")
+    order = pending_orders.get(chat_id)
+    if not order or order.get("processed"):
+        bot.send_message(chat_id=chat_id, text="Заказ не найден или уже обработан.")
+        print(f"Заказ для chat_id {chat_id} не найден или уже обработан.")
+        return
 
     painting_id = order["painting_id"]
     price_usdt_units = order["price_usdt_units"]
@@ -91,6 +91,8 @@ def tron_address_to_hex(address):
     wallet_hex = tron_address_to_hex(TRON_WALLET_ADDRESS)
 
     try:
+        # Закомментируем проверку транзакций для теста отправки файла
+        """
         print("Запрос транзакций TronGrid...")
         url = f"https://api.trongrid.io/v1/accounts/{TRON_WALLET_ADDRESS}/transactions/trc20"
         headers = {"TRON-PRO-API-KEY": TRONGRID_API_KEY}
@@ -125,13 +127,31 @@ def tron_address_to_hex(address):
                     del pending_orders[chat_id]
                 print(f"Оплата подтверждена для chat_id: {chat_id}, файл отправлен.")
                 return
+        """
 
+        # Для теста сразу отправляем файл, как будто оплата подтверждена
+        bot.send_message(
+            chat_id=chat_id,
+            text=f"[ТЕСТ] Оплата подтверждена! Вы купили картину с ID: {painting_id}. Вот ваша картина:"
+        )
+        bot.send_document(
+            chat_id=chat_id,
+            document=file_url,
+            filename=f"painting_{painting_id}.jpg"
+        )
+        if chat_id in pending_orders:
+            pending_orders[chat_id]["processed"] = True
+            del pending_orders[chat_id]
+        print(f"[ТЕСТ] Файл отправлен для chat_id: {chat_id}")
+
+        """
         bot.send_message(chat_id=chat_id, text="Оплата пока не подтверждена. Попробуйте снова через несколько минут.",
                          reply_markup=InlineKeyboardMarkup([
                              [InlineKeyboardButton("Проверить оплату", callback_data='check_payment')],
                              [InlineKeyboardButton("Отменить заказ", callback_data='cancel_order')]
                          ]))
         print("Транзакция не найдена.")
+        """
     except Exception as e:
         print(f"Ошибка при проверке оплаты: {str(e)}")
         bot.send_message(chat_id=chat_id, text="Произошла ошибка при проверке оплаты. Попробуйте снова.",
