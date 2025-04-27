@@ -176,6 +176,7 @@ def button_callback(update):
             print("Заказ для отмены не найден.")
 
 def check_payment(chat_id):
+    print(f"Запуск проверки оплаты для chat_id: {chat_id}")
     order = pending_orders.get(chat_id)
     if not order or order.get("processed"):
         print(f"Заказ для chat_id {chat_id} не найден или уже обработан.")
@@ -184,6 +185,7 @@ def check_payment(chat_id):
     painting_id = order["painting_id"]
     price_usdt_units = order["price_usdt_units"]
     start_time = order["timestamp"]
+    print(f"Проверка оплаты: painting_id={painting_id}, price_usdt_units={price_usdt_units}, start_time={start_time}")
 
     wallet_hex = tron_address_to_hex(TRON_WALLET_ADDRESS)
 
@@ -196,13 +198,16 @@ def check_payment(chat_id):
             return
 
         try:
+            print("Запрос транзакций TronGrid...")
             url = f"https://api.trongrid.io/v1/accounts/{TRON_WALLET_ADDRESS}/transactions/trc20"
             headers = {"TRON-PRO-API-KEY": TRONGRID_API_KEY}
             params = {"limit": 50}
             if last_checked_tx:
                 params["min_timestamp"] = int(last_checked_tx * 1000)
             response = requests.get(url, headers=headers, params=params)
+            response.raise_for_status()
             data = response.json()
+            print(f"Получены транзакции: {data}")
 
             transactions = data.get("data", [])
             for tx in transactions:
@@ -226,10 +231,16 @@ def check_payment(chat_id):
 
                 last_checked_tx = max(last_checked_tx or 0, int(tx["block_timestamp"]) / 1000)
 
+            print("Транзакция не найдена, ждём 30 секунд...")
             time.sleep(30)
         except Exception as e:
             print(f"Ошибка при проверке оплаты: {str(e)}")
-            time.sleep(30)
+            # Если произошла ошибка, прерываем проверку, чтобы не зациклиться
+            if chat_id in pending_orders:
+                bot.send_message(chat_id=chat_id, text="Произошла ошибка при проверке оплаты. Попробуйте снова.")
+                pending_orders[chat_id]["processed"] = True
+                del pending_orders[chat_id]
+            return
 
     if chat_id in pending_orders and not pending_orders[chat_id]["processed"]:
         bot.send_message(chat_id=chat_id, text="Время ожидания оплаты истекло. Попробуйте снова.")
