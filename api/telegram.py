@@ -65,13 +65,13 @@ def tron_address_to_hex(address):
     print(f"Tron-адрес в HEX: {hex_address}")
     return hex_address
 
-def check_payment(chat_id):
-    print(f"Ручная проверка оплаты для chat_id: {chat_id}")
-    order = pending_orders.get(chat_id)
-    if not order or order.get("processed"):
-        bot.send_message(chat_id=chat_id, text="Заказ не найден или уже обработан.")
-        print(f"Заказ для chat_id {chat_id} не найден или уже обработан.")
-        return
+# def check_payment(chat_id):
+#     print(f"Ручная проверка оплаты для chat_id: {chat_id}")
+#     order = pending_orders.get(chat_id)
+#     if not order or order.get("processed"):
+#         bot.send_message(chat_id=chat_id, text="Заказ не найден или уже обработан.")
+#         print(f"Заказ для chat_id {chat_id} не найден или уже обработан.")
+#         return
 
     painting_id = order["painting_id"]
     price_usdt_units = order["price_usdt_units"]
