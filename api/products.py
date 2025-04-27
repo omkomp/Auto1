@@ -8,7 +8,7 @@ products = [
         "item_id": "1",
         "name": "Картина 1",
         "price": 100,
-        "file_url": "https://drive.google.com/uc?export=download&id=16fgRdfJokZvvLqTe8hJthAKu54I6tYtE"
+        "file_url": "https://drive.google.com/uc?export=download&id=1bc7kIbT9a7sofbzBdDiuaKBOgBw8RMhR"
     },
     {
         "item_id": "2",
