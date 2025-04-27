@@ -1,4 +1,0 @@
-[
-    {"item_id": "1", "name": "Картина 1", "price": 100, "image": "https://example.com/image1.jpg"},
-    {"item_id": "2", "name": "Картина 2", "price": 150, "image": "https://example.com/image2.jpg"}
-]
