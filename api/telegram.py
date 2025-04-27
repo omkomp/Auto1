@@ -8,6 +8,7 @@ from PIL import Image
 import time
 import base58
 import os
+import threading
 
 app = Flask(__name__)
 BOT_TOKEN = "7981458266:AAGp5jIgvf_KHN_P_7pBURBnYqrT-X89mNQ"
@@ -64,6 +65,78 @@ def start(update):
     print("Отправка приветственного сообщения...")
     bot.send_message(chat_id=chat_id, text='Добро пожаловать в магазин!', reply_markup=reply_markup)
     print("Сообщение отправлено.")
+
+def check_payment(chat_id):
+    print(f"Запуск проверки оплаты для chat_id: {chat_id}")
+    order = pending_orders.get(chat_id)
+    if not order or order.get("processed"):
+        print(f"Заказ для chat_id {chat_id} не найден или уже обработан.")
+        return
+
+    painting_id = order["painting_id"]
+    price_usdt_units = order["price_usdt_units"]
+    start_time = order["timestamp"]
+    print(f"Проверка оплаты: painting_id={painting_id}, price_usdt_units={price_usdt_units}, start_time={start_time}")
+
+    wallet_hex = tron_address_to_hex(TRON_WALLET_ADDRESS)
+
+    timeout = 600
+    last_checked_tx = None
+
+    while time.time() - start_time < timeout:
+        if chat_id not in pending_orders or pending_orders[chat_id]["processed"]:
+            print(f"Заказ для chat_id {chat_id} был удалён или обработан, завершаем проверку.")
+            return
+
+        try:
+            print("Запрос транзакций TronGrid...")
+            url = f"https://api.trongrid.io/v1/accounts/{TRON_WALLET_ADDRESS}/transactions/trc20"
+            headers = {"TRON-PRO-API-KEY": TRONGRID_API_KEY}
+            params = {"limit": 50}
+            if last_checked_tx:
+                params["min_timestamp"] = int(last_checked_tx * 1000)
+            response = requests.get(url, headers=headers, params=params)
+            response.raise_for_status()
+            data = response.json()
+            print(f"Получены транзакции: {data}")
+
+            transactions = data.get("data", [])
+            for tx in transactions:
+                if tx["token_info"]["address"] != USDT_CONTRACT_ADDRESS:
+                    continue
+
+                if tx["to"] != TRON_WALLET_ADDRESS:
+                    continue
+
+                value = int(tx["value"])
+                if value >= price_usdt_units:
+                    bot.send_message(
+                        chat_id=chat_id,
+                        text=f"Оплата подтверждена! Вы купили картину с ID: {painting_id}. Спасибо за покупку!"
+                    )
+                    if chat_id in pending_orders:
+                        pending_orders[chat_id]["processed"] = True
+                        del pending_orders[chat_id]
+                    print(f"Оплата подтверждена для chat_id: {chat_id}")
+                    return
+
+                last_checked_tx = max(last_checked_tx or 0, int(tx["block_timestamp"]) / 1000)
+
+            print("Транзакция не найдена, ждём 30 секунд...")
+            time.sleep(30)
+        except Exception as e:
+            print(f"Ошибка при проверке оплаты: {str(e)}")
+            if chat_id in pending_orders:
+                bot.send_message(chat_id=chat_id, text="Произошла ошибка при проверке оплаты. Попробуйте снова.")
+                pending_orders[chat_id]["processed"] = True
+                del pending_orders[chat_id]
+            return
+
+    if chat_id in pending_orders and not pending_orders[chat_id]["processed"]:
+        bot.send_message(chat_id=chat_id, text="Время ожидания оплаты истекло. Попробуйте снова.")
+        pending_orders[chat_id]["processed"] = True
+        del pending_orders[chat_id]
+        print(f"Время ожидания истекло для chat_id: {chat_id}")
 
 def button_callback(update):
     query = update.callback_query
@@ -162,7 +235,8 @@ def button_callback(update):
             }
             print(f"Заказ сохранён для chat_id: {chat_id}")
 
-            check_payment(chat_id)
+            # Запускаем check_payment в отдельном потоке
+            threading.Thread(target=check_payment, args=(chat_id,), daemon=True).start()
         else:
             bot.send_message(chat_id=chat_id, text="Картина не найдена.")
     elif query_data == 'cancel_order':
@@ -174,79 +248,6 @@ def button_callback(update):
         else:
             bot.send_message(chat_id=chat_id, text="Нет активного заказа для отмены.")
             print("Заказ для отмены не найден.")
-
-def check_payment(chat_id):
-    print(f"Запуск проверки оплаты для chat_id: {chat_id}")
-    order = pending_orders.get(chat_id)
-    if not order or order.get("processed"):
-        print(f"Заказ для chat_id {chat_id} не найден или уже обработан.")
-        return
-
-    painting_id = order["painting_id"]
-    price_usdt_units = order["price_usdt_units"]
-    start_time = order["timestamp"]
-    print(f"Проверка оплаты: painting_id={painting_id}, price_usdt_units={price_usdt_units}, start_time={start_time}")
-
-    wallet_hex = tron_address_to_hex(TRON_WALLET_ADDRESS)
-
-    timeout = 600
-    last_checked_tx = None
-
-    while time.time() - start_time < timeout:
-        if chat_id not in pending_orders or pending_orders[chat_id]["processed"]:
-            print(f"Заказ для chat_id {chat_id} был удалён или обработан, завершаем проверку.")
-            return
-
-        try:
-            print("Запрос транзакций TronGrid...")
-            url = f"https://api.trongrid.io/v1/accounts/{TRON_WALLET_ADDRESS}/transactions/trc20"
-            headers = {"TRON-PRO-API-KEY": TRONGRID_API_KEY}
-            params = {"limit": 50}
-            if last_checked_tx:
-                params["min_timestamp"] = int(last_checked_tx * 1000)
-            response = requests.get(url, headers=headers, params=params)
-            response.raise_for_status()
-            data = response.json()
-            print(f"Получены транзакции: {data}")
-
-            transactions = data.get("data", [])
-            for tx in transactions:
-                if tx["token_info"]["address"] != USDT_CONTRACT_ADDRESS:
-                    continue
-
-                if tx["to"] != TRON_WALLET_ADDRESS:
-                    continue
-
-                value = int(tx["value"])
-                if value >= price_usdt_units:
-                    bot.send_message(
-                        chat_id=chat_id,
-                        text=f"Оплата подтверждена! Вы купили картину с ID: {painting_id}. Спасибо за покупку!"
-                    )
-                    if chat_id in pending_orders:
-                        pending_orders[chat_id]["processed"] = True
-                        del pending_orders[chat_id]
-                    print(f"Оплата подтверждена для chat_id: {chat_id}")
-                    return
-
-                last_checked_tx = max(last_checked_tx or 0, int(tx["block_timestamp"]) / 1000)
-
-            print("Транзакция не найдена, ждём 30 секунд...")
-            time.sleep(30)
-        except Exception as e:
-            print(f"Ошибка при проверке оплаты: {str(e)}")
-            # Если произошла ошибка, прерываем проверку, чтобы не зациклиться
-            if chat_id in pending_orders:
-                bot.send_message(chat_id=chat_id, text="Произошла ошибка при проверке оплаты. Попробуйте снова.")
-                pending_orders[chat_id]["processed"] = True
-                del pending_orders[chat_id]
-            return
-
-    if chat_id in pending_orders and not pending_orders[chat_id]["processed"]:
-        bot.send_message(chat_id=chat_id, text="Время ожидания оплаты истекло. Попробуйте снова.")
-        pending_orders[chat_id]["processed"] = True
-        del pending_orders[chat_id]
-        print(f"Время ожидания истекло для chat_id: {chat_id}")
 
 @app.route('/telegram', methods=['POST', 'GET'])
 def webhook():
