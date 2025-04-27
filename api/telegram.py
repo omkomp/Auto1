@@ -92,6 +92,8 @@ def check_payment(chat_id):
     wallet_hex = tron_address_to_hex(TRON_WALLET_ADDRESS)
 
     try:
+        # Закомментируем проверку транзакций для теста отправки файла
+        """
         print("Запрос транзакций TronGrid...")
         url = f"https://api.trongrid.io/v1/accounts/{TRON_WALLET_ADDRESS}/transactions/trc20"
         headers = {"TRON-PRO-API-KEY": TRONGRID_API_KEY}
@@ -133,6 +135,22 @@ def check_payment(chat_id):
                              [InlineKeyboardButton("Отменить заказ", callback_data='cancel_order')]
                          ]))
         print("Транзакция не найдена.")
+        """
+
+        # Для теста сразу отправляем файл, как будто оплата подтверждена
+        bot.send_message(
+            chat_id=chat_id,
+            text=f"[ТЕСТ] Оплата подтверждена! Вы купили картину с ID: {painting_id}. Вот ваш файл:"
+        )
+        bot.send_document(
+            chat_id=chat_id,
+            document=file_id,
+            filename=f"archive_{painting_id}.zip" if painting_id == "1" else f"painting_{painting_id}.jpg"
+        )
+        if chat_id in pending_orders:
+            pending_orders[chat_id]["processed"] = True
+            del pending_orders[chat_id]
+        print(f"[ТЕСТ] Файл отправлен для chat_id: {chat_id}")
     except Exception as e:
         print(f"Ошибка при проверке оплаты: {str(e)}")
         bot.send_message(chat_id=chat_id, text="Произошла ошибка при проверке оплаты. Попробуйте снова.",
